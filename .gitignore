@@ -1,0 +1,8 @@
+config.py
+subscribers.csv
+subscriber_changes.csv
+command_usage.csv
+daily_prayer_times.csv
+__pycache__
+.gitgnore.save
+.vscode/
