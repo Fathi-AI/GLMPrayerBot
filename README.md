@@ -40,7 +40,7 @@ Contributions to the GLMPrayerBot are welcome. Please follow these steps to cont
 This project is licensed under the [GPL-3.0 license](https://www.gnu.org/licenses/gpl-3.0.en.html).
 
 ## Contact
-For any queries or suggestions, please contact me at [Your Email].
+For any queries or suggestions, please contact me at TBD.
 
 ## Acknowledgments
 - Green Lane Masjid for the initial inspiration.
