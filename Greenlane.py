@@ -15,6 +15,8 @@ from datetime import datetime, timedelta
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import Updater, CommandHandler, CallbackContext, JobQueue, CallbackQueryHandler
 from apscheduler.schedulers.background import BackgroundScheduler
+from telegram import ParseMode
+
 
 # Telegram configuration
 telegram_bot_token = TELEGRAM_BOT_TOKEN
@@ -272,27 +274,29 @@ def today_prayers(update: Update, context: CallbackContext):
         update.callback_query.answer()
 
     global prayer_times
-    message = "Today's Prayer Times:\n"
+    message = "<b>Today's Prayer Times:</b>\n\n"
     
     if not prayer_times:
         update.message.reply_text("Sorry, I'm unable to fetch today's prayer times right now. Please try again later.")
         return
     
-    # Inside the today_prayers function
     for prayer, details in prayer_times.items():
         if prayer.lower() != 'sunrise':  # Exclude sunrise if needed
             emoji = details['emoji']
             start_time = details['start']
-            jamat_time = f", Jamat at {details['jamat']}" if details['jamat'] else ""
-            message += f"{emoji} {prayer}: {start_time}{jamat_time}\n"
-
+            jamat_time = details['jamat']
+            message += f"<b>{emoji} {prayer}:</b>\n   Start: {start_time}\n"
+            if jamat_time:
+                message += f"   Jamat: {jamat_time}\n"
+            message += "\n"
             
     # Get the button layout
     reply_markup = get_button_layout(chat_id)
     
     # Use the appropriate method to send the reply
     reply_method = update.callback_query.message.reply_text if is_callback_query else update.message.reply_text
-    reply_method(message, reply_markup=reply_markup)
+    reply_method(message, parse_mode=ParseMode.HTML, reply_markup=reply_markup)
+
     
 def log_subscriber_change(action, chat_id):
     now = datetime.now()
