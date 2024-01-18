@@ -67,13 +67,18 @@ def scrape_prayer_times(jq: JobQueue):
         rows = prayer_times_table.find_all('tr')
 
         prayer_times_dict = {}
+
+        # Inside the scrape_prayer_times function
         for row in rows:
             columns = row.find_all('td')
-            if len(columns) > 2 and 'prayer_time' in columns[0].get('class', []):
+            if len(columns) > 3 and 'prayer_time' in columns[0].get('class', []):
                 prayer_name = columns[0].get_text().strip()
                 start_time = columns[2].get_text().strip()
+                jamat_time = columns[3].get_text().strip() if prayer_name.lower() not in ['sunrise', 'maghrib'] else ""
                 emoji = prayer_emojis.get(prayer_name, "🕌")
-                prayer_times_dict[prayer_name] = {'start': start_time, 'emoji': emoji}
+                prayer_times_dict[prayer_name] = {'start': start_time, 'jamat': jamat_time, 'emoji': emoji}
+
+
         prayer_times = prayer_times_dict
 
     except requests.exceptions.RequestException as e:
@@ -273,11 +278,14 @@ def today_prayers(update: Update, context: CallbackContext):
         update.message.reply_text("Sorry, I'm unable to fetch today's prayer times right now. Please try again later.")
         return
     
+    # Inside the today_prayers function
     for prayer, details in prayer_times.items():
         if prayer.lower() != 'sunrise':  # Exclude sunrise if needed
             emoji = details['emoji']
             start_time = details['start']
-            message += f"{emoji} {prayer}: {start_time}\n"
+            jamat_time = f", Jamat at {details['jamat']}" if details['jamat'] else ""
+            message += f"{emoji} {prayer}: {start_time}{jamat_time}\n"
+
             
     # Get the button layout
     reply_markup = get_button_layout(chat_id)
@@ -356,9 +364,16 @@ def check_prayer_times(context: CallbackContext):
     global subscribers
     prayer_name = context.job.context['prayer_name']
     emoji = context.job.context['emoji']
+    jamat_time = context.job.context['jamat']
     message = f"It's time for {prayer_name} prayer. {emoji}"
+
+     # Append Jamat time if it's not Maghrib
+    if prayer_name.lower() != 'maghrib' and jamat_time:
+        message += f" Jamat at {jamat_time}."
+
     for chat_id in subscribers:
-        context.bot.send_message(chat_id=chat_id, text=message)
+        reply_markup = get_button_layout(chat_id)
+        context.bot.send_message(chat_id=chat_id, text=message, reply_markup=reply_markup)
 
         
 def schedule_prayer_notifications(jq: JobQueue):
@@ -374,9 +389,11 @@ def schedule_prayer_notifications(jq: JobQueue):
         if prayer.lower() != 'sunrise':
             prayer_time_str = times['start']
             emoji = times['emoji']
+            jamat_time = times['jamat']
             prayer_time = datetime.strptime(prayer_time_str, '%I:%M %p').replace(year=now.year, month=now.month, day=now.day)
             if prayer_time > now:
-                jq.run_once(check_prayer_times, prayer_time, context={'prayer_name': prayer, 'prayer_time': prayer_time, 'emoji': emoji}, name='prayer_notification')
+                jq.run_once(check_prayer_times, prayer_time, context={'prayer_name': prayer, 'prayer_time': prayer_time, 'emoji': emoji, 'jamat': jamat_time}, name='prayer_notification')
+
 
 
 
