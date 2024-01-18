@@ -140,9 +140,10 @@ def get_next_prayer():
     min_diff = timedelta(days=1)
     next_prayer = None
     next_prayer_time = None
+    next_prayer_jamat = None 
 
     if not prayer_times:
-        return None, None
+        return None, None, None
 
     for prayer, times in prayer_times.items():
         if prayer.lower() != 'sunrise':
@@ -152,25 +153,18 @@ def get_next_prayer():
                 min_diff = prayer_time - now
                 next_prayer = prayer
                 next_prayer_time = prayer_time
+                next_prayer_jamat = times['jamat'] 
 
-    return next_prayer, next_prayer_time
+    return next_prayer, next_prayer_time, next_prayer_jamat
 
     
-    
-
-    for prayer, times in prayer_times.items():
-        if prayer.lower() != 'sunrise':
-            prayer_time_str = times['start']
-            prayer_time = datetime.strptime(prayer_time_str, '%I:%M %p').replace(year=now.year, month=now.month, day=now.day)
-            if now < prayer_time < now + min_diff:
-                min_diff = prayer_time - now
-                next_prayer = prayer
-                next_prayer_time = prayer_time
-
-    return next_prayer, next_prayer_time
 
 def format_timedelta(td):
     total_seconds = int(td.total_seconds())
+    # Round up to the next minute if there are any remaining seconds
+    if total_seconds % 60 > 0:
+        total_seconds += 60
+
     hours = total_seconds // 3600
     minutes = (total_seconds % 3600) // 60
 
@@ -234,7 +228,7 @@ def next_prayer(update: Update, context: CallbackContext):
 
     global prayer_times
     
-    next_prayer, prayer_time = get_next_prayer()
+    next_prayer, prayer_time, jamat_time  = get_next_prayer()
     now = datetime.now()
     
     if not prayer_times:
@@ -247,6 +241,9 @@ def next_prayer(update: Update, context: CallbackContext):
         time_remaining = prayer_time - datetime.now()
         formatted_time_remaining = format_timedelta(time_remaining)
         message = f"{emoji} Next prayer is {next_prayer} at {prayer_time.strftime('%I:%M %p')}. Time remaining: {formatted_time_remaining}"
+        if next_prayer.lower() != 'maghrib' and jamat_time:  # Add Jamat time for non-Maghrib prayers
+            message += f"\n\nJamat is at {jamat_time}."
+    
     else:
         # Calculate time until Fajr of the next day
         fajr_time_str = prayer_times['Fajr']['start']
