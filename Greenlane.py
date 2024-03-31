@@ -16,6 +16,8 @@ from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import Updater, CommandHandler, CallbackContext, JobQueue, CallbackQueryHandler
 from apscheduler.schedulers.background import BackgroundScheduler
 from telegram import ParseMode
+from telegram.error import Unauthorized
+
 
 
 # Telegram configuration
@@ -368,13 +370,24 @@ def check_prayer_times(context: CallbackContext):
     jamat_time = context.job.context['jamat']
     message = f"It's time for {prayer_name} prayer. {emoji}"
 
-     # Append Jamat time if it's not Maghrib
     if prayer_name.lower() != 'maghrib' and jamat_time:
         message += f" Jamat at {jamat_time}."
 
-    for chat_id in subscribers:
+    for chat_id in list(subscribers):  # Use list to avoid RuntimeError due to set size change during iteration
         reply_markup = get_button_layout(chat_id)
-        context.bot.send_message(chat_id=chat_id, text=message, reply_markup=reply_markup)
+        try:
+            context.bot.send_message(chat_id=chat_id, text=message, reply_markup=reply_markup)
+        except Unauthorized:
+            logging.error(f"Bot was blocked by the user {chat_id}. Removing from subscribers.")
+            subscribers.remove(chat_id)  # Remove the chat_id from the subscribers set
+            update_subscribers_csv()  # Update the subscribers.csv file
+
+def update_subscribers_csv():
+    """Update the subscribers.csv file to reflect changes in the subscribers set."""
+    with open('subscribers.csv', 'w', newline='') as csvfile:
+        writer = csv.writer(csvfile)
+        for chat_id in subscribers:
+            writer.writerow([chat_id])
 
         
 def schedule_prayer_notifications(jq: JobQueue):
@@ -385,16 +398,18 @@ def schedule_prayer_notifications(jq: JobQueue):
 
     # Schedule new notifications
     global prayer_times
-    now = datetime.now()
+    uk_timezone = timezone('Europe/London')
+    now = datetime.now(uk_timezone)
     for prayer, times in prayer_times.items():
         if prayer.lower() != 'sunrise':
             prayer_time_str = times['start']
             emoji = times['emoji']
             jamat_time = times['jamat']
-            prayer_time = datetime.strptime(prayer_time_str, '%I:%M %p').replace(year=now.year, month=now.month, day=now.day)
+            prayer_time = uk_timezone.localize(datetime.strptime(prayer_time_str, '%I:%M %p').replace(year=now.year, month=now.month, day=now.day))
             if prayer_time > now:
                 jq.run_once(check_prayer_times, prayer_time, context={'prayer_name': prayer, 'prayer_time': prayer_time, 'emoji': emoji, 'jamat': jamat_time}, name='prayer_notification')
-
+                # Log the scheduling
+                logging.info(f"Scheduled '{prayer}' prayer notification for {prayer_time.strftime('%Y-%m-%d %H:%M:%S %Z')}")
 
 
 
@@ -402,6 +417,7 @@ def schedule_prayer_notifications(jq: JobQueue):
 def setup_scheduler(jq: JobQueue):
     # Set the scheduler to use UK time
     uk_timezone = timezone('Europe/London')
+    now = datetime.now(uk_timezone)
     scheduler = BackgroundScheduler(timezone=uk_timezone)
 
     scheduler.add_job(lambda: scrape_prayer_times(jq), 'cron', hour=0, minute=1)
